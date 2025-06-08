@@ -8,7 +8,7 @@ ffi = false
 # verbosity = 3 # Uncomment for more verbose output during tests/scripts
 
 # Set the Solidity compiler version to match your contracts (e.g., ^0.8.20)
-solc_version = '0.8.20'
+solc_version = '0.8.30'
 
 # Remappings help the compiler resolve import paths like "@openzeppelin/"
 # This maps "@openzeppelin/" to the path where `openzeppelin-contracts` is installed in `lib/`

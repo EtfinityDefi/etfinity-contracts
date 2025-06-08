@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.30;
 
 /**
  * @dev Interface for Chainlink AggregatorV3 price feeds.
@@ -27,7 +27,8 @@ interface IChainlinkAggregator {
         );
 
     /**
-     * @dev Returns the version of the aggregator.
+     * @dev Returns the number of decimals used by the price feed.
+     * This is crucial for correctly scaling the price data.
      */
-    function version() external view returns (uint256);
+    function decimals() external view returns (uint8);
 }
