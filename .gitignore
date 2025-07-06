@@ -10,6 +10,7 @@ docs/
 
 # Dotenv file
 .env
+.env.foundry
 
 .DS_Store
 .github/

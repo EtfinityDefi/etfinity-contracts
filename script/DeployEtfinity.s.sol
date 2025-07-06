@@ -13,33 +13,36 @@ import "../contracts/sSPYToken.sol"; // The actual sSPYToken contract
 /**
  * @title DeployEtfinity
  * @dev The main deployment script for the entire Etfinity Protocol.
- * This script now directly handles the deployment of all core components,
- * including the SyntheticAssetManager, sSPYToken, mock collateral token (USDC),
+ * This script handles the deployment of all core components:
+ * SyntheticAssetManager, sSPYToken, mock collateral token (USDC),
  * and mock Chainlink price feeds.
  *
- * This approach avoids nested script deployments that can hit contract size limits,
- * making the deployment process more robust and efficient.
- *
  * To run this script:
- * 1. Ensure your Anvil instance is running (`anvil`).
- * 2. Set your `PRIVATE_KEY` environment variable (e.g., `export PRIVATE_KEY=0x...`).
- * 3. Execute with Forge: `forge script script/DeployEtfinity.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvvv`
- * (Adjust RPC URL and add `--verify` and `--etherscan-api-key` for testnet/mainnet verification)
+ * 1. Ensure your Anvil instance is running (`anvil`) for local testing.
+ * 2. Set your private key and RPC URL environment variables (e.g., in a .env file).
+ * Example .env (for Sepolia):
+ * SEPOLIA_PRIVATE_KEY=0x...
+ * SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+ * ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY
+ *
+ * 3. Execute with Forge:
+ * For Sepolia: `forge script script/DeployEtfinity.s.sol --rpc-url sepolia --broadcast --verify -vvvv`
+ * For Arbitrum Sepolia: `forge script script/DeployEtfinity.s.sol --rpc-url arbitrumSepolia --broadcast --verify -vvvv`
  */
 contract DeployEtfinity is Script {
-    // --- Constants for Deployment Parameters (Mirroring test setup for consistency) ---
-    uint256 public constant INITIAL_TARGET_CR = 15000; // 150.00% collateralization ratio
-    uint256 public constant INITIAL_MIN_CR = 13000; // 130.00% minimum collateralization ratio
-    uint256 public constant INITIAL_LIQUIDATION_BONUS = 500; // 5.00% liquidation bonus
+    // --- Constants for Deployment Parameters ---
+    uint256 public constant INITIAL_TARGET_CR = 15000; // 150.00% collateralization ratio (basis points)
+    uint256 public constant INITIAL_MIN_CR = 13000; // 130.00% minimum collateralization ratio (basis points)
+    uint256 public constant INITIAL_LIQUIDATION_BONUS = 500; // 5.00% liquidation bonus (basis points)
 
-    // Mock Chainlink price feed values, scaled by 10**8 as is typical for Chainlink.
-    uint256 public constant SPY_PRICE_NORMAL = 5200 * 10 ** 8; // $5200 per synthetic asset unit.
-    uint256 public constant USDC_PRICE_NORMAL = 1 * 10 ** 8; // $1.00 per collateral asset unit.
+    // Mock Chainlink price feed values, scaled by 10**8 as is typical.
+    uint256 public constant SPY_PRICE_NORMAL = 5200 * 10 ** 8; // $5200 per synthetic asset unit
+    uint256 public constant USDC_PRICE_NORMAL = 1 * 10 ** 8; // $1.00 per collateral asset unit
 
     // Decimal places for mock tokens and price feeds.
-    uint8 public constant SSPY_DECIMALS = 18; // sSPY token decimal places.
-    uint8 public constant USDC_DECIMALS = 6; // USDC token decimal places.
-    uint8 public constant CHAINLINK_PRICE_DECIMALS = 8; // Chainlink price feed decimal places.
+    uint8 public constant SSPY_DECIMALS = 18;
+    uint8 public constant USDC_DECIMALS = 6;
+    uint8 public constant CHAINLINK_PRICE_DECIMALS = 8;
 
     // Stores the addresses of the deployed contracts
     address public syntheticAssetManagerAddress;
@@ -47,19 +50,38 @@ contract DeployEtfinity is Script {
     address public usdcTokenAddress;
     address public spyPriceFeedAddress;
     address public usdcPriceFeedAddress;
-    // Add more state variables here for other deployed contracts (e.g., CollateralVault)
-    // address public collateralVaultAddress;
 
     function run() public returns (address) {
-        // Load deployer's private key and address
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
+        uint256 deployerPrivateKey;
+        string memory privateKeyEnvVar;
+
+        // Determine which private key environment variable to use based on the current chain ID
+        if (block.chainid == 11155111) {
+            // Sepolia Chain ID
+            privateKeyEnvVar = "SEPOLIA_PRIVATE_KEY";
+            console.log("Deploying to Sepolia.");
+        } else if (block.chainid == 421614) {
+            // Arbitrum Sepolia Chain ID
+            privateKeyEnvVar = "ARBITRUM_SEPOLIA_PRIVATE_KEY";
+            console.log("Deploying to Arbitrum Sepolia.");
+        } else {
+            // Fallback for local development (e.g., Anvil) or other testnets
+            privateKeyEnvVar = "PRIVATE_KEY";
+            console.log(
+                "Deploying to unknown chain, attempting to use generic PRIVATE_KEY."
+            );
+        }
+
+        // Load deployer's private key. vm.envUint will revert if the variable is not set.
+        deployerPrivateKey = vm.envUint(privateKeyEnvVar);
+        address payable deployer = payable(vm.addr(deployerPrivateKey));
 
         // Start broadcasting transactions from the deployer account.
-        // This single broadcast will cover all deployments and interactions within this script.
         vm.startBroadcast(deployerPrivateKey);
 
         console.log("\n--- Deploying Etfinity Protocol Components ---\n");
+        console.log("Deployer address:", deployer);
+        console.log("Account balance:", deployer.balance);
 
         // 1. Deploy MockERC20 for USDC collateral
         console.log("-> Deploying MockERC20 for USDC...");
@@ -83,8 +105,6 @@ contract DeployEtfinity is Script {
         console.log("   USDC Price Feed deployed at:", usdcPriceFeedAddress);
 
         // 3. Deploy the actual sSPYToken contract
-        // The sSPYToken constructor grants MINTER_ROLE to the initialMinter (which will be SyntheticAssetManager)
-        // Here, we temporarily grant it to the deployer, then transfer to the manager.
         console.log(
             "-> Deploying sSPYToken (real contract) with deployer as initial minter..."
         );
@@ -95,7 +115,7 @@ contract DeployEtfinity is Script {
         // 4. Deploy the SyntheticAssetManager contract
         console.log("-> Deploying SyntheticAssetManager...");
         SyntheticAssetManager manager = new SyntheticAssetManager(
-            sspyTokenAddress, // Pass the real sSPYToken address
+            sspyTokenAddress,
             usdcTokenAddress,
             spyPriceFeedAddress,
             usdcPriceFeedAddress,
@@ -110,7 +130,6 @@ contract DeployEtfinity is Script {
         );
 
         // 5. Grant MINTER_ROLE on sSPYToken to the SyntheticAssetManager
-        // This is done by the deployer (who is admin of sSPYToken and temporarily had MINTER_ROLE).
         console.log(
             "-> Granting MINTER_ROLE on sSPYToken to SyntheticAssetManager..."
         );
@@ -122,32 +141,12 @@ contract DeployEtfinity is Script {
             "   MINTER_ROLE granted to SyntheticAssetManager on sSPYToken."
         );
 
-        // --- Deploy other core components of the Etfinity Protocol (EXAMPLES) ---
-        // Uncomment and implement these sections as your protocol grows.
-
-        // Example: Deploying a CollateralVault
-        // console.log("\n-> Deploying CollateralVault...");
-        // CollateralVault collateralVault = new CollateralVault(sspyTokenAddress, syntheticAssetManagerAddress);
-        // collateralVaultAddress = address(collateralVault);
-        // console.log("   CollateralVault deployed at:", collateralVaultAddress);
-
-        // Example: Granting roles to the CollateralVault on sSPYToken if needed
-        // (Note: sSPYToken is imported to access its MINTER_ROLE constant and grantRole function)
-        // console.log("-> Granting necessary roles to CollateralVault on sSPYToken...");
-        // sspyToken.grantRole(sspyToken.MINTER_ROLE(), collateralVaultAddress);
-        // console.log("   Roles granted to CollateralVault.");
-
-        // Example: Deploying another hypothetical Etfinity module
-        // console.log("\n-> Deploying AnotherEtfinityModule...");
-        // AnotherEtfinityModule anotherModule = new AnotherEtfinityModule(syntheticAssetManagerAddress, sspyTokenAddress);
-        // console.log("   AnotherEtfinityModule deployed at:", address(anotherModule));
-
         console.log("\n--- Etfinity Protocol Deployment Complete ---\n");
 
         // Stop broadcasting transactions.
         vm.stopBroadcast();
 
-        // Return the address of the main deployed component or the orchestrator itself
+        // Return the address of the main deployed component
         return syntheticAssetManagerAddress;
     }
 }

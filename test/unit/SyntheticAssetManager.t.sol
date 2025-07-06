@@ -3,10 +3,10 @@ pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol"; // Used for initial setup logging, consider removing for final production tests.
-import "../contracts/SyntheticAssetManager.sol";
-import "../contracts/sSPYToken.sol"; // Import the specific sSPYToken contract
-import "../contracts/mocks/MockERC20.sol";
-import "../contracts/mocks/MockChainlinkAggregator.sol";
+import "../../contracts/SyntheticAssetManager.sol";
+import "../../contracts/sSPYToken.sol"; // Import the specific sSPYToken contract
+import "../../contracts/mocks/MockERC20.sol";
+import "../../contracts/mocks/MockChainlinkAggregator.sol";
 
 // --- Custom Errors from OpenZeppelin Contracts (for expectRevert) ---
 // These are standard errors often thrown by OpenZeppelin's AccessControl and Pausable modules.
@@ -999,6 +999,75 @@ contract SyntheticAssetManagerTest is Test {
             INITIAL_MIN_CR
         );
         vm.stopPrank();
+    }
+
+    /**
+     * @dev Tests the mintSPY function with specific, user-provided values.
+     * This test sets a custom S&P 500 price and verifies the exact sSPY amount minted.
+     */
+    function testMintSPY_SpecificValues() public {
+        // --- Test Setup Values ---
+        uint256 usdcAmountToMintWith = 5 * (10 ** USDC_DECIMALS); // 5 USDC (5,000,000 wei with 6 decimals)
+
+        // Set S&P price to $665.63 (with Chainlink's 8 decimals: 665.63 * 10^8 = 66,563,000,000)
+        int256 customSPYPrice = 66563000000;
+        spyPriceFeed.setAnswer(customSPYPrice);
+
+        uint256 expectedSspyAmountWei = 5007787108954424;
+
+        // --- Initial State Check ---
+        uint256 initialUserUSDCBalance = usdc.balanceOf(user1);
+        assertEq(
+            initialUserUSDCBalance,
+            INITIAL_USDC_MINT,
+            "User1 initial USDC balance incorrect"
+        );
+        assertEq(
+            sspy.balanceOf(user1),
+            0,
+            "User1 initial sSPY balance should be 0"
+        );
+
+        // --- Step 1: User approves the manager to spend USDC ---
+        vm.startPrank(user1);
+        usdc.approve(address(manager), usdcAmountToMintWith); // Approve exact amount for this test
+        vm.stopPrank();
+
+        // Verify the allowance was set correctly
+        assertEq(
+            usdc.allowance(user1, address(manager)),
+            usdcAmountToMintWith,
+            "Manager should have correct allowance from user1"
+        );
+
+        // --- Step 2: User calls mintSPY on the manager ---
+        vm.startPrank(user1);
+        manager.mintSPY(usdcAmountToMintWith);
+        vm.stopPrank();
+
+        // --- Assertions ---
+        // Verify sSPY balance of the user
+        assertEq(
+            sspy.balanceOf(user1),
+            expectedSspyAmountWei,
+            "User1 should have minted the expected sSPY amount"
+        );
+
+        // Verify USDC balance of the user decreased by the minted amount
+        assertEq(
+            usdc.balanceOf(user1),
+            initialUserUSDCBalance - usdcAmountToMintWith,
+            "User1 USDC balance should decrease by minted amount"
+        );
+
+        // Verify USDC balance of the manager increased by the minted amount
+        assertEq(
+            usdc.balanceOf(address(manager)),
+            usdcAmountToMintWith,
+            "Manager USDC balance should increase by minted amount"
+        );
+
+        console.log("Minted sSPY (actual):", sspy.balanceOf(user1));
     }
 
     // --- Test Suite: Redeeming Functionality (`redeemSPY`) ---

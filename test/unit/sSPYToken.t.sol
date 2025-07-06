@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol"; // For console.log in tests
-import "../contracts/sSPYToken.sol";
+import "../../contracts/sSPYToken.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol"; // Import AccessControl for its custom error
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol"; // Import ERC20Pausable for its custom error
 
